@@ -32,9 +32,9 @@ def parseServerHello(message):
     return cipher_suite
     
 
-def sendClientHello(cipherSuites, namedCurves):
+def sendClientHello(cipherSuites, namedCurves, major, minor):
     # Start with the client version number
-    message = struct.pack("!BB", 3, 3)
+    message = struct.pack("!BB", major, minor)
 
     # TLS client hello has 32 bytes of random data. Use 7;
     # that's a random number (I promise, I rolled a D20). 
@@ -73,12 +73,12 @@ def sendClientHello(cipherSuites, namedCurves):
     
     return fragment
 
-def hello(ip, port, cipherSuites, namedCurves):
+def hello(ip, port, cipherSuites, namedCurves, major, minor):
 
-    clientHelloMessage = sendClientHello(cipherSuites, namedCurves)
+    clientHelloMessage = sendClientHello(cipherSuites, namedCurves, major, minor)
 
-    # Create a handshake (type 22) record using TLS1.2 (3.3 on the wire). 
-    header = struct.pack("!BBBH", 22, 3, 3, len(clientHelloMessage)); 
+    # Create a handshake (type 22) record using TLS
+    header = struct.pack("!BBBH", 22, major, minor, len(clientHelloMessage)); 
 
     s = socket.socket()
     s.connect((ip, port))
@@ -152,27 +152,30 @@ if __name__ == "__main__":
     
     endpoint = sys.argv[1]
 
-    all_suites = suites.keys()
-    negotiated_suites = [ ] 
-    while len(suites):
-        try:
-            negotiated = hello(endpoint, port, all_suites, curves) 
-            negotiated_suites.append(negotiated)
-            all_suites.remove(negotiated)
-        except:
-            break
+    major = 3
+    for minor in range(0, 4):
+    
+        all_suites = suites.keys()
+        negotiated_suites = [ ] 
+        while len(suites):
+            try:
+                negotiated = hello(endpoint, port, all_suites, curves, major, minor) 
+                negotiated_suites.append(negotiated)
+                all_suites.remove(negotiated)
+            except:
+                break
 
-    # Reverse the list
-    negotiated_suites.reverse()
+        # Reverse the list
+        negotiated_suites.reverse()
 
-    order = "server"
-    if hello(endpoint, port, negotiated_suites, curves) is negotiated_suites[0]:
-        order = "client"
+        order = "server"
+        if hello(endpoint, port, negotiated_suites, curves, major, minor) is negotiated_suites[0]:
+            order = "client"
 
-    negotiated_suites.reverse()
+        negotiated_suites.reverse()
 
-    print ("Server uses %s ordering for cipher suites" % order)
-    print "Supported suites:"
-    for suite in negotiated_suites:
-        print "    " + suites[ suite ]
+        print "TLS %d.%d Server uses %s ordering for cipher suites" % (major, minor, order)
+        print "Supported suites:"
+        for suite in negotiated_suites:
+            print "    " + suites[ suite ]
 
